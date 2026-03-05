@@ -1,0 +1,11 @@
+# Copy this file to terraform.tfvars and fill in your values.
+# terraform.tfvars is in .gitignore — never commit it.
+
+aws_region    = "us-east-1"
+project_name  = "stock-movers"
+environment   = "prod"
+stock_api_key = "YOUR_STOCK_API_KEY_HERE"
+
+# Optional overrides
+# stock_watchlist     = ["AAPL", "MSFT", "GOOGL", "AMZN", "TSLA", "NVDA"]
+# schedule_expression = "cron(0 21 * * ? *)"
