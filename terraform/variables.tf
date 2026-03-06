@@ -34,7 +34,7 @@ variable "stock_watchlist" {
 }
 
 variable "schedule_expression" {
-  description = "EventBridge cron expression for the ingestion job. Default: 9 PM UTC (5 PM EST), after market close."
+  description = "EventBridge cron expression for the ingestion job. Default: 2 AM UTC (9 PM EST / 10 PM EDT), ~5 h after market close."
   type        = string
-  default     = "cron(0 21 * * ? *)"
+  default     = "cron(0 2 * * ? *)"
 }

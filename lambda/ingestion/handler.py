@@ -46,12 +46,13 @@ def get_api_key(secret_arn):
     return json.loads(secret["SecretString"])["api_key"]
 
 
-def fetch_most_recent_ohlc(ticker, api_key):
-    """Return (date_str, open, close) for the most recent available trading day.
-    Queries the last 7 days and takes the latest bar — handles the free tier's
-    1-day data lag and weekends/holidays automatically.
+def fetch_most_recent_ohlc(ticker, api_key, target_date=None):
+    """Return (date_str, open, close) for the most recent available trading day,
+    or for a specific target_date when backfilling.
+    Queries a 7-day window ending on target_date (or today) and takes the latest
+    bar — handles free-tier data lag and weekends/holidays automatically.
     """
-    to_date = datetime.now(timezone.utc).date()
+    to_date = target_date if target_date else datetime.now(timezone.utc).date()
     from_date = to_date - timedelta(days=7)
     url = (
         f"{MASSIVE_BASE}/v2/aggs/ticker/{ticker}/range/1/day"
@@ -64,8 +65,16 @@ def fetch_most_recent_ohlc(ticker, api_key):
     results = data.get("results", [])
     if not results:
         raise ValueError(f"No recent data returned for {ticker}")
+
+    if target_date:
+        # Backfill: find the bar whose date matches target_date exactly.
+        for bar in reversed(results):
+            bar_dt = datetime.fromtimestamp(bar["t"] / 1000, tz=timezone.utc).date()
+            if bar_dt == target_date:
+                return bar_dt.isoformat(), float(bar["o"]), float(bar["c"])
+        raise ValueError(f"No bar found for {ticker} on {target_date.isoformat()}")
+
     bar = results[-1]  # most recent trading day
-    # Convert millisecond timestamp to YYYY-MM-DD
     bar_date = datetime.fromtimestamp(bar["t"] / 1000, tz=timezone.utc).strftime("%Y-%m-%d")
     return bar_date, float(bar["o"]), float(bar["c"])
 
@@ -93,6 +102,14 @@ def lambda_handler(event, context):
     secret_arn = os.environ["SECRET_ARN"]
     watchlist = [t.strip() for t in os.environ["STOCK_WATCHLIST"].split(",")]
 
+    # --- Backfill mode: invoke with {"backfill_date": "2025-03-04"} to correct a specific date.
+    # Backfill always writes, bypassing the idempotency guard.
+    backfill_date_str = event.get("backfill_date") if isinstance(event, dict) else None
+    target_date = None
+    if backfill_date_str:
+        target_date = datetime.strptime(backfill_date_str, "%Y-%m-%d").date()
+        logger.info("Backfill mode: targeting %s", backfill_date_str)
+
     # --- Retrieve API key ---
     try:
         api_key = get_api_key(secret_arn)
@@ -105,7 +122,7 @@ def lambda_handler(event, context):
     record_date = None
     for ticker in watchlist:
         try:
-            bar_date, open_price, close_price = fetch_most_recent_ohlc(ticker, api_key)
+            bar_date, open_price, close_price = fetch_most_recent_ohlc(ticker, api_key, target_date=target_date)
             pct_change = ((close_price - open_price) / open_price) * 100
             valid_results.append({
                 "ticker": ticker,
@@ -172,6 +189,17 @@ def lambda_handler(event, context):
     }
     if z_score is not None:
         item["z_score"] = Decimal(str(round(z_score, 2)))
+
+    # --- Idempotency guard (skipped in backfill mode) ---
+    # Prevents overwriting a valid record with a stale bar from a lagging API.
+    if not target_date:
+        existing = table.get_item(Key={"date": record_date}).get("Item")
+        if existing:
+            logger.warning(
+                "Record for %s already exists in DynamoDB — API may still be lagging. Skipping write.",
+                record_date,
+            )
+            return {"statusCode": 200, "body": json.dumps({"skipped": True, "reason": "already_exists", "date": record_date})}
 
     table.put_item(Item=item)
     logger.info("Successfully wrote record to DynamoDB for %s", record_date)
