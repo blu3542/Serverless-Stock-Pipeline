@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Stock Movers</title>
+  <style>
+    /* ── Reset & Base ─────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #0f1117;
+      color: #e2e8f0;
+      min-height: 100vh;
+      padding: 2rem 1rem;
+    }
+
+    /* ── Layout ───────────────────────────────────────────── */
+    .container { max-width: 960px; margin: 0 auto; }
+
+    header {
+      display: flex;
+      align-items: baseline;
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+
+    h1 { font-size: 1.75rem; font-weight: 700; letter-spacing: -0.5px; }
+
+    .subtitle {
+      font-size: 0.85rem;
+      color: #718096;
+    }
+
+    /* ── State messages ───────────────────────────────────── */
+    #loading, #error, #empty {
+      text-align: center;
+      padding: 4rem 0;
+      font-size: 1rem;
+    }
+
+    #loading { color: #718096; }
+
+    .spinner {
+      display: inline-block;
+      width: 24px; height: 24px;
+      border: 3px solid #2d3748;
+      border-top-color: #63b3ed;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      vertical-align: middle;
+      margin-right: 0.5rem;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    #error {
+      color: #fc8181;
+      background: #1a0a0a;
+      border: 1px solid #742a2a;
+      border-radius: 8px;
+      padding: 1.5rem 2rem;
+    }
+
+    #empty { color: #718096; }
+
+    /* ── Table ────────────────────────────────────────────── */
+    .table-wrap { overflow-x: auto; }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.9rem;
+    }
+
+    thead tr { border-bottom: 2px solid #2d3748; }
+
+    th {
+      text-align: left;
+      padding: 0.75rem 1rem;
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: #718096;
+    }
+
+    tbody tr {
+      border-bottom: 1px solid #1e2530;
+      transition: background 0.15s;
+    }
+    tbody tr:hover { background: #161b26; }
+
+    td {
+      padding: 0.9rem 1rem;
+      vertical-align: middle;
+    }
+
+    /* ── Ticker chip ──────────────────────────────────────── */
+    .ticker {
+      font-weight: 700;
+      font-size: 1rem;
+      letter-spacing: 0.04em;
+      background: #1e2530;
+      padding: 0.2rem 0.55rem;
+      border-radius: 4px;
+    }
+
+    /* ── % Change (gain / loss) ───────────────────────────── */
+    .gain { color: #68d391; font-weight: 600; }
+    .loss { color: #fc8181; font-weight: 600; }
+
+    /* ── Significance badge ───────────────────────────────── */
+    .badge-unusual {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.3rem;
+      background: #2d1b00;
+      color: #f6ad55;
+      border: 1px solid #744210;
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 0.2rem 0.55rem;
+      border-radius: 999px;
+      white-space: nowrap;
+    }
+
+    .badge-normal { color: #4a5568; font-size: 0.8rem; }
+
+    /* ── Footer ───────────────────────────────────────────── */
+    footer {
+      margin-top: 2.5rem;
+      text-align: center;
+      font-size: 0.75rem;
+      color: #4a5568;
+    }
+
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+<div class="container">
+
+  <header>
+    <h1>📈 Stock Movers</h1>
+    <span class="subtitle">Top daily mover across AAPL · MSFT · GOOGL · AMZN · TSLA · NVDA</span>
+  </header>
+
+  <div id="loading"><span class="spinner"></span> Loading latest data…</div>
+
+  <div id="error" class="hidden"></div>
+
+  <div id="empty" class="hidden">No data yet — check back after market close (5 PM EST).</div>
+
+  <div id="table-container" class="hidden">
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Ticker</th>
+            <th>% Change</th>
+            <th>Open</th>
+            <th>Close</th>
+            <th>Z-Score</th>
+            <th>Significance</th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <footer id="footer" class="hidden"></footer>
+
+</div>
+
+<script>
+  // ── Configuration ─────────────────────────────────────────
+  // Replace this URL after running `terraform apply` and copying the api_endpoint output.
+  const API_URL = "https://y8kadghxxb.execute-api.us-west-1.amazonaws.com/prod/movers";
+
+  // ── DOM refs ─────────────────────────────────────────────
+  const $loading  = document.getElementById("loading");
+  const $error    = document.getElementById("error");
+  const $empty    = document.getElementById("empty");
+  const $table    = document.getElementById("table-container");
+  const $tbody    = document.getElementById("tbody");
+  const $footer   = document.getElementById("footer");
+
+  function show(el)  { el.classList.remove("hidden"); }
+  function hide(el)  { el.classList.add("hidden"); }
+
+  // ── Formatters ───────────────────────────────────────────
+  function fmtPct(v)    { return (v >= 0 ? "+" : "") + v.toFixed(2) + "%"; }
+  function fmtPrice(v)  { return "$" + v.toFixed(2); }
+  function fmtZ(v)      { return v != null ? v.toFixed(2) : "—"; }
+  function fmtDate(d)   {
+    // "2025-07-01" → "Tue, Jul 1"
+    const [y, m, day] = d.split("-").map(Number);
+    return new Date(y, m - 1, day).toLocaleDateString("en-US", {
+      weekday: "short", month: "short", day: "numeric"
+    });
+  }
+
+  // ── Build table row ──────────────────────────────────────
+  function buildRow(mover) {
+    const isGain = mover.pct_change >= 0;
+    const pctClass = isGain ? "gain" : "loss";
+
+    const significanceBadge = mover.is_significant
+      ? `<span class="badge-unusual">⚠️ Unusual Move</span>`
+      : `<span class="badge-normal">—</span>`;
+
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${fmtDate(mover.date)}</td>
+      <td><span class="ticker">${mover.ticker}</span></td>
+      <td class="${pctClass}">${fmtPct(mover.pct_change)}</td>
+      <td>${fmtPrice(mover.open_price)}</td>
+      <td>${fmtPrice(mover.close_price)}</td>
+      <td>${fmtZ(mover.z_score)}</td>
+      <td>${significanceBadge}</td>
+    `;
+    return tr;
+  }
+
+  // ── Fetch & render ───────────────────────────────────────
+  async function loadMovers() {
+    try {
+      const res = await fetch(API_URL);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+
+      hide($loading);
+
+      if (!data.movers || data.movers.length === 0) {
+        show($empty);
+        return;
+      }
+
+      data.movers.forEach(m => $tbody.appendChild(buildRow(m)));
+
+      $footer.textContent =
+        `${data.count} record${data.count !== 1 ? "s" : ""} · last updated ${data.generated_at}`;
+
+      show($table);
+      show($footer);
+
+    } catch (err) {
+      hide($loading);
+      $error.textContent = `Failed to load data: ${err.message}. Please try again later.`;
+      show($error);
+    }
+  }
+
+  document.addEventListener("DOMContentLoaded", loadMovers);
+</script>
+</body>
+</html>

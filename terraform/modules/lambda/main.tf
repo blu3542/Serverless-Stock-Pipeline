@@ -2,16 +2,51 @@ locals {
   builds_dir = "${path.module}/builds"
 }
 
-# Zip Lambda source code from sibling /lambda directory
+# ── Install pip dependencies into staging dirs before zipping ─────────────────
+resource "null_resource" "ingestion_deps" {
+  triggers = {
+    requirements = filemd5("${path.root}/../lambda/ingestion/requirements.txt")
+    handler      = filemd5("${path.root}/../lambda/ingestion/handler.py")
+  }
+
+  provisioner "local-exec" {
+    command = <<-EOT
+      rm -rf ${local.builds_dir}/ingestion_pkg
+      mkdir -p ${local.builds_dir}/ingestion_pkg
+      pip3 install -r ${path.root}/../lambda/ingestion/requirements.txt -t ${local.builds_dir}/ingestion_pkg/ --quiet
+      cp ${path.root}/../lambda/ingestion/handler.py ${local.builds_dir}/ingestion_pkg/
+    EOT
+  }
+}
+
+resource "null_resource" "retrieval_deps" {
+  triggers = {
+    requirements = filemd5("${path.root}/../lambda/retrieval/requirements.txt")
+    handler      = filemd5("${path.root}/../lambda/retrieval/handler.py")
+  }
+
+  provisioner "local-exec" {
+    command = <<-EOT
+      rm -rf ${local.builds_dir}/retrieval_pkg
+      mkdir -p ${local.builds_dir}/retrieval_pkg
+      pip3 install -r ${path.root}/../lambda/retrieval/requirements.txt -t ${local.builds_dir}/retrieval_pkg/ --quiet
+      cp ${path.root}/../lambda/retrieval/handler.py ${local.builds_dir}/retrieval_pkg/
+    EOT
+  }
+}
+
+# ── Zip each staging dir ──────────────────────────────────────────────────────
 data "archive_file" "ingestion" {
+  depends_on  = [null_resource.ingestion_deps]
   type        = "zip"
-  source_dir  = "${path.root}/../lambda/ingestion"
+  source_dir  = "${local.builds_dir}/ingestion_pkg"
   output_path = "${local.builds_dir}/ingestion.zip"
 }
 
 data "archive_file" "retrieval" {
+  depends_on  = [null_resource.retrieval_deps]
   type        = "zip"
-  source_dir  = "${path.root}/../lambda/retrieval"
+  source_dir  = "${local.builds_dir}/retrieval_pkg"
   output_path = "${local.builds_dir}/retrieval.zip"
 }
 
@@ -23,7 +58,7 @@ resource "aws_lambda_function" "ingestion" {
   role             = var.ingestion_role_arn
   handler          = "handler.lambda_handler"
   runtime          = "python3.12"
-  timeout          = 30  # Enough time for 6 sequential API calls with retries
+  timeout          = 300
   memory_size      = 128
 
   environment {
