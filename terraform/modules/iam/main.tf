@@ -27,7 +27,7 @@ resource "aws_iam_role_policy" "ingestion_lambda" {
       {
         Sid    = "DynamoDBWrite"
         Effect = "Allow"
-        Action = ["dynamodb:PutItem", "dynamodb:UpdateItem"]
+        Action = ["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:UpdateItem"]
         Resource = var.dynamodb_table_arn
       },
       {
