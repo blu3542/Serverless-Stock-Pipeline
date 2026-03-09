@@ -163,7 +163,7 @@
             <th>% Change</th>
             <th>Open</th>
             <th>Close</th>
-            <th>Z-Score</th>
+            <th>Percentile</th>
             <th>Significance</th>
           </tr>
         </thead>
@@ -195,7 +195,7 @@
   // ── Formatters ───────────────────────────────────────────
   function fmtPct(v)    { return (v >= 0 ? "+" : "") + v.toFixed(2) + "%"; }
   function fmtPrice(v)  { return "$" + v.toFixed(2); }
-  function fmtZ(v)      { return v != null ? v.toFixed(2) : "—"; }
+  function fmtPercentile(v) { return v != null ? v.toFixed(1) + "th %ile" : "—"; }
   function fmtDate(d)   {
     // "2025-07-01" → "Tue, Jul 1"
     const [y, m, day] = d.split("-").map(Number);
@@ -220,7 +220,7 @@
       <td class="${pctClass}">${fmtPct(mover.pct_change)}</td>
       <td>${fmtPrice(mover.open_price)}</td>
       <td>${fmtPrice(mover.close_price)}</td>
-      <td>${fmtZ(mover.z_score)}</td>
+      <td>${fmtPercentile(mover.percentile_rank)}</td>
       <td>${significanceBadge}</td>
     `;
     return tr;

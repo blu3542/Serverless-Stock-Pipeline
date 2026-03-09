@@ -1,7 +1,6 @@
 import json
 import logging
 import os
-import statistics
 import time
 import traceback
 from datetime import datetime, timedelta, timezone
@@ -150,25 +149,24 @@ def lambda_handler(event, context):
     winner = max(valid_results, key=lambda x: abs(x["pct_change"]))
     logger.info("Winner: %s with %.2f%% change on %s", winner["ticker"], winner["pct_change"], record_date)
 
-    # --- Compute z-score for winner ---
-    z_score = None
+    # --- Compute percentile rank for winner (85th percentile = notable move) ---
+    percentile_rank = None
     is_significant = False
     try:
         as_of = datetime.strptime(record_date, "%Y-%m-%d").date()
         historical_changes = fetch_historical_changes(winner["ticker"], as_of, api_key)
         if len(historical_changes) >= 2:
-            mean = statistics.mean(historical_changes)
-            std = statistics.stdev(historical_changes)
-            if std != 0:
-                z_score = round((winner["pct_change"] - mean) / std, 2)
-                is_significant = abs(z_score) > 2.0
-                logger.info("Z-score for %s: %.2f (significant=%s)", winner["ticker"], z_score, is_significant)
-            else:
-                logger.warning("Std dev is 0 for %s — skipping z-score", winner["ticker"])
+            abs_changes = [abs(c) for c in historical_changes]
+            abs_today = abs(winner["pct_change"])
+            percentile_rank = round(
+                sum(1 for c in abs_changes if c <= abs_today) / len(abs_changes) * 100, 1
+            )
+            is_significant = percentile_rank >= 85.0
+            logger.info("Percentile rank for %s: %.1f (significant=%s)", winner["ticker"], percentile_rank, is_significant)
         else:
-            logger.warning("Not enough historical data for %s to compute z-score", winner["ticker"])
+            logger.warning("Not enough historical data for %s to compute percentile rank", winner["ticker"])
     except Exception:
-        logger.error("Failed to compute z-score for %s — recording null:\n%s",
+        logger.error("Failed to compute percentile rank for %s — recording null:\n%s",
                      winner["ticker"], traceback.format_exc())
 
     # --- Write to DynamoDB ---
@@ -187,8 +185,8 @@ def lambda_handler(event, context):
         "is_significant": is_significant,
         "ttl": ttl,
     }
-    if z_score is not None:
-        item["z_score"] = Decimal(str(round(z_score, 2)))
+    if percentile_rank is not None:
+        item["percentile_rank"] = Decimal(str(round(percentile_rank, 1)))
 
     # --- Idempotency guard (skipped in backfill mode) ---
     # Prevents overwriting a valid record with a stale bar from a lagging API.
@@ -210,7 +208,7 @@ def lambda_handler(event, context):
             "date": record_date,
             "winner": winner["ticker"],
             "pct_change": winner["pct_change"],
-            "z_score": z_score,
+            "percentile_rank": percentile_rank,
             "is_significant": is_significant,
         }),
     }
