@@ -381,6 +381,12 @@
   const $daysSelect = document.getElementById("days-select");
 
   let chartInstance = null;
+  let hideTooltipTimer = null;
+
+  // Prevent tooltip from flickering when mouse moves from bar to tooltip div
+  const $chartTooltip = document.getElementById("chart-tooltip");
+  $chartTooltip.addEventListener("mouseenter", () => clearTimeout(hideTooltipTimer));
+  $chartTooltip.addEventListener("mouseleave", () => $chartTooltip.classList.add("hidden"));
 
   function show(el)  { el.classList.remove("hidden"); }
   function hide(el)  { el.classList.add("hidden"); }
@@ -437,9 +443,10 @@
               const $tt = document.getElementById("chart-tooltip");
 
               if (tooltip.opacity === 0) {
-                $tt.classList.add("hidden");
+                hideTooltipTimer = setTimeout(() => $tt.classList.add("hidden"), 150);
                 return;
               }
+              clearTimeout(hideTooltipTimer);
 
               const mover = displayed[tooltip.dataPoints[0].dataIndex];
               const sign = mover.pct_change >= 0 ? "+" : "";
