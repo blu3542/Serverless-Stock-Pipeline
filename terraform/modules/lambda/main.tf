@@ -102,3 +102,52 @@ resource "aws_cloudwatch_log_group" "retrieval" {
   name              = "/aws/lambda/${aws_lambda_function.retrieval.function_name}"
   retention_in_days = 14
 }
+
+# ── Analyst Lambda ────────────────────────────────────────────────────────────
+resource "null_resource" "analyst_deps" {
+  triggers = {
+    requirements = filemd5("${path.root}/../lambda/analyst/requirements.txt")
+    handler      = filemd5("${path.root}/../lambda/analyst/handler.py")
+  }
+
+  provisioner "local-exec" {
+    command = <<-EOT
+      rm -rf ${local.builds_dir}/analyst_pkg
+      mkdir -p ${local.builds_dir}/analyst_pkg
+      pip3 install -r ${path.root}/../lambda/analyst/requirements.txt -t ${local.builds_dir}/analyst_pkg/ --quiet
+      cp ${path.root}/../lambda/analyst/handler.py ${local.builds_dir}/analyst_pkg/
+    EOT
+  }
+}
+
+data "archive_file" "analyst" {
+  depends_on  = [null_resource.analyst_deps]
+  type        = "zip"
+  source_dir  = "${local.builds_dir}/analyst_pkg"
+  output_path = "${local.builds_dir}/analyst.zip"
+}
+
+resource "aws_lambda_function" "analyst" {
+  function_name    = "${var.project_name}-analyst-${var.environment}"
+  filename         = data.archive_file.analyst.output_path
+  source_code_hash = data.archive_file.analyst.output_base64sha256
+  role             = var.analyst_role_arn
+  handler          = "handler.lambda_handler"
+  runtime          = "python3.12"
+  timeout          = 30
+  memory_size      = 128
+
+  environment {
+    variables = {
+      DYNAMODB_TABLE       = var.dynamodb_table_name
+      ANTHROPIC_SECRET_ARN = var.anthropic_secret_arn
+    }
+  }
+
+  tags = { Name = "${var.project_name}-analyst-${var.environment}" }
+}
+
+resource "aws_cloudwatch_log_group" "analyst" {
+  name              = "/aws/lambda/${aws_lambda_function.analyst.function_name}"
+  retention_in_days = 14
+}

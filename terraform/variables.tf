@@ -27,6 +27,12 @@ variable "stock_api_key" {
   sensitive   = true
 }
 
+variable "anthropic_api_key" {
+  description = "Anthropic API key for the AI analyst Lambda"
+  type        = string
+  sensitive   = true
+}
+
 variable "stock_watchlist" {
   description = "Ordered list of ticker symbols to monitor each day"
   type        = list(string)

@@ -49,17 +49,23 @@ jobs:
           pip3 install -r lambda/retrieval/requirements.txt -t terraform/modules/lambda/builds/retrieval_pkg/ --quiet
           cp lambda/retrieval/handler.py terraform/modules/lambda/builds/retrieval_pkg/
 
+          mkdir -p terraform/modules/lambda/builds/analyst_pkg
+          pip3 install -r lambda/analyst/requirements.txt -t terraform/modules/lambda/builds/analyst_pkg/ --quiet
+          cp lambda/analyst/handler.py terraform/modules/lambda/builds/analyst_pkg/
+
       # ── 6. Plan ───────────────────────────────────────────────────────────
       - name: Terraform Plan
         run: terraform plan -out=tfplan
         env:
-          TF_VAR_stock_api_key: ${{ secrets.TF_VAR_STOCK_API_KEY }}
+          TF_VAR_stock_api_key:     ${{ secrets.TF_VAR_STOCK_API_KEY }}
+          TF_VAR_anthropic_api_key: ${{ secrets.TF_VAR_ANTHROPIC_API_KEY }}
 
       # ── 7. Apply ──────────────────────────────────────────────────────────
       - name: Terraform Apply
         run: terraform apply -auto-approve tfplan
         env:
-          TF_VAR_stock_api_key: ${{ secrets.TF_VAR_STOCK_API_KEY }}
+          TF_VAR_stock_api_key:     ${{ secrets.TF_VAR_STOCK_API_KEY }}
+          TF_VAR_anthropic_api_key: ${{ secrets.TF_VAR_ANTHROPIC_API_KEY }}
 
       # ── 8. Deploy frontend to S3 ──────────────────────────────────────────
       - name: Deploy frontend to S3

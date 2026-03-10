@@ -76,3 +76,40 @@ resource "aws_iam_role_policy" "retrieval_lambda" {
     ]
   })
 }
+
+# ── Analyst Lambda Role ───────────────────────────────────────────────────────
+# Permissions: DynamoDB read + Secrets Manager read (Anthropic key) + CloudWatch logs
+
+resource "aws_iam_role" "analyst_lambda" {
+  name               = "${var.project_name}-analyst-${var.environment}"
+  assume_role_policy = local.lambda_assume_role_policy
+}
+
+resource "aws_iam_role_policy" "analyst_lambda" {
+  name = "${var.project_name}-analyst-policy-${var.environment}"
+  role = aws_iam_role.analyst_lambda.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid      = "DynamoDBRead"
+        Effect   = "Allow"
+        Action   = ["dynamodb:Scan", "dynamodb:Query", "dynamodb:GetItem"]
+        Resource = var.dynamodb_table_arn
+      },
+      {
+        Sid      = "ReadAnthropicKey"
+        Effect   = "Allow"
+        Action   = ["secretsmanager:GetSecretValue"]
+        Resource = var.anthropic_secret_arn
+      },
+      {
+        Sid      = "CloudWatchLogs"
+        Effect   = "Allow"
+        Action   = ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"]
+        Resource = "arn:aws:logs:*:*:*"
+      }
+    ]
+  })
+}

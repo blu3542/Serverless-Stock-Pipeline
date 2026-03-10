@@ -44,31 +44,35 @@ module "dynamodb" {
 
 # ── Secrets ───────────────────────────────────────────────
 module "secrets_manager" {
-  source        = "./modules/secrets_manager"
-  project_name  = var.project_name
-  environment   = var.environment
-  stock_api_key = var.stock_api_key
+  source            = "./modules/secrets_manager"
+  project_name      = var.project_name
+  environment       = var.environment
+  stock_api_key     = var.stock_api_key
+  anthropic_api_key = var.anthropic_api_key
 }
 
 # ── IAM ───────────────────────────────────────────────────
 module "iam" {
-  source             = "./modules/iam"
-  project_name       = var.project_name
-  environment        = var.environment
-  dynamodb_table_arn = module.dynamodb.table_arn
-  secret_arn         = module.secrets_manager.secret_arn
+  source               = "./modules/iam"
+  project_name         = var.project_name
+  environment          = var.environment
+  dynamodb_table_arn   = module.dynamodb.table_arn
+  secret_arn           = module.secrets_manager.secret_arn
+  anthropic_secret_arn = module.secrets_manager.anthropic_secret_arn
 }
 
 # ── Lambda Functions ──────────────────────────────────────
 module "lambda" {
-  source              = "./modules/lambda"
-  project_name        = var.project_name
-  environment         = var.environment
-  ingestion_role_arn  = module.iam.ingestion_lambda_role_arn
-  retrieval_role_arn  = module.iam.retrieval_lambda_role_arn
-  dynamodb_table_name = module.dynamodb.table_name
-  secret_arn          = module.secrets_manager.secret_arn
-  stock_watchlist     = var.stock_watchlist
+  source               = "./modules/lambda"
+  project_name         = var.project_name
+  environment          = var.environment
+  ingestion_role_arn   = module.iam.ingestion_lambda_role_arn
+  retrieval_role_arn   = module.iam.retrieval_lambda_role_arn
+  analyst_role_arn     = module.iam.analyst_lambda_role_arn
+  dynamodb_table_name  = module.dynamodb.table_name
+  secret_arn           = module.secrets_manager.secret_arn
+  anthropic_secret_arn = module.secrets_manager.anthropic_secret_arn
+  stock_watchlist      = var.stock_watchlist
 }
 
 # ── Scheduler ─────────────────────────────────────────────
@@ -88,6 +92,8 @@ module "api_gateway" {
   environment           = var.environment
   retrieval_lambda_arn  = module.lambda.retrieval_lambda_arn
   retrieval_lambda_name = module.lambda.retrieval_lambda_name
+  analyst_lambda_arn    = module.lambda.analyst_lambda_arn
+  analyst_lambda_name   = module.lambda.analyst_lambda_name
   aws_region            = var.aws_region
   aws_account_id        = data.aws_caller_identity.current.account_id
 }

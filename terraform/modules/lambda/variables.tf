@@ -1,7 +1,9 @@
-variable "project_name"        { type = string }
-variable "environment"          { type = string }
-variable "ingestion_role_arn"   { type = string }
-variable "retrieval_role_arn"   { type = string }
-variable "dynamodb_table_name"  { type = string }
-variable "secret_arn"           { type = string }
-variable "stock_watchlist"      { type = list(string) }
+variable "project_name"         { type = string }
+variable "environment"           { type = string }
+variable "ingestion_role_arn"    { type = string }
+variable "retrieval_role_arn"    { type = string }
+variable "analyst_role_arn"      { type = string }
+variable "dynamodb_table_name"   { type = string }
+variable "secret_arn"            { type = string }
+variable "anthropic_secret_arn"  { type = string }
+variable "stock_watchlist"       { type = list(string) }

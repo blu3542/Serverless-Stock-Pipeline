@@ -14,3 +14,18 @@ resource "aws_secretsmanager_secret_version" "stock_api_key" {
     api_key = var.stock_api_key
   })
 }
+
+resource "aws_secretsmanager_secret" "anthropic_api_key" {
+  name                    = "${var.project_name}/${var.environment}/anthropic-api-key"
+  description             = "Anthropic API key for AI analyst feature"
+  recovery_window_in_days = 0
+
+  tags = {
+    Name = "${var.project_name}-anthropic-secret-${var.environment}"
+  }
+}
+
+resource "aws_secretsmanager_secret_version" "anthropic_api_key" {
+  secret_id     = aws_secretsmanager_secret.anthropic_api_key.id
+  secret_string = jsonencode({ api_key = var.anthropic_api_key })
+}

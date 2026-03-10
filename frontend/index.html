@@ -148,6 +148,75 @@
       color: #4a5568;
     }
 
+    /* ── AI Analyst ───────────────────────────────────────── */
+    #analyst-section {
+      margin-top: 2.5rem;
+      background: #161b26;
+      border: 1px solid #2d3748;
+      border-radius: 10px;
+      padding: 1.5rem;
+    }
+
+    #analyst-section h2 {
+      font-size: 1rem;
+      font-weight: 600;
+      margin-bottom: 1rem;
+      color: #e2e8f0;
+    }
+
+    .analyst-input-row {
+      display: flex;
+      gap: 0.75rem;
+    }
+
+    #analyst-input {
+      flex: 1;
+      background: #0f1117;
+      border: 1px solid #2d3748;
+      border-radius: 6px;
+      color: #e2e8f0;
+      font-size: 0.9rem;
+      padding: 0.6rem 0.9rem;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+
+    #analyst-input:focus { border-color: #63b3ed; }
+    #analyst-input::placeholder { color: #4a5568; }
+
+    #analyst-btn {
+      background: #2b6cb0;
+      border: none;
+      border-radius: 6px;
+      color: #fff;
+      cursor: pointer;
+      font-size: 0.9rem;
+      font-weight: 600;
+      padding: 0.6rem 1.25rem;
+      transition: background 0.15s;
+      white-space: nowrap;
+    }
+
+    #analyst-btn:hover:not(:disabled) { background: #3182ce; }
+    #analyst-btn:disabled { background: #2d3748; color: #718096; cursor: not-allowed; }
+
+    #analyst-answer {
+      margin-top: 1rem;
+      background: #0f1117;
+      border: 1px solid #2d3748;
+      border-radius: 6px;
+      color: #e2e8f0;
+      font-size: 0.9rem;
+      line-height: 1.6;
+      padding: 0.85rem 1rem;
+    }
+
+    #analyst-error {
+      margin-top: 1rem;
+      color: #fc8181;
+      font-size: 0.85rem;
+    }
+
     .hidden { display: none; }
   </style>
 </head>
@@ -186,12 +255,29 @@
 
   <footer id="footer" class="hidden"></footer>
 
+  <div id="analyst-section">
+    <h2>AI Analyst</h2>
+    <div class="analyst-input-row">
+      <input
+        id="analyst-input"
+        type="text"
+        placeholder="Ask anything about the data…"
+        maxlength="500"
+      />
+      <button id="analyst-btn">Ask</button>
+    </div>
+    <div id="analyst-answer" class="hidden"></div>
+    <div id="analyst-error" class="hidden"></div>
+  </div>
+
 </div>
 
 <script>
   // ── Configuration ─────────────────────────────────────────
   // Replace this URL after running `terraform apply` and copying the api_endpoint output.
   const API_URL = "https://y8kadghxxb.execute-api.us-west-1.amazonaws.com/prod/movers";
+  // Replace with the analyst_endpoint output from `terraform apply`.
+  const ANALYST_ENDPOINT = "YOUR_API_GATEWAY_URL/prod/analyst";
 
   // ── DOM refs ─────────────────────────────────────────────
   const $loading  = document.getElementById("loading");
@@ -268,6 +354,49 @@
   }
 
   document.addEventListener("DOMContentLoaded", loadMovers);
+
+  // ── AI Analyst ───────────────────────────────────────────
+  const $analystInput  = document.getElementById("analyst-input");
+  const $analystBtn    = document.getElementById("analyst-btn");
+  const $analystAnswer = document.getElementById("analyst-answer");
+  const $analystError  = document.getElementById("analyst-error");
+
+  async function askAnalyst(question) {
+    const res = await fetch(ANALYST_ENDPOINT, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question, context_days: 7 }),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    return data.answer;
+  }
+
+  $analystBtn.addEventListener("click", async () => {
+    const question = $analystInput.value.trim();
+    if (!question) return;
+
+    hide($analystAnswer);
+    hide($analystError);
+    $analystBtn.disabled = true;
+    $analystBtn.textContent = "Thinking…";
+
+    try {
+      const answer = await askAnalyst(question);
+      $analystAnswer.textContent = answer;
+      show($analystAnswer);
+    } catch (err) {
+      $analystError.textContent = `Error: ${err.message}. Please try again.`;
+      show($analystError);
+    } finally {
+      $analystBtn.disabled = false;
+      $analystBtn.textContent = "Ask";
+    }
+  });
+
+  $analystInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") $analystBtn.click();
+  });
 </script>
 </body>
 </html>
