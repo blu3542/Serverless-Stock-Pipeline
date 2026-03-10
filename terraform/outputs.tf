@@ -3,6 +3,11 @@ output "api_endpoint" {
   value       = module.api_gateway.api_endpoint
 }
 
+output "analyst_endpoint" {
+  description = "Full URL to POST /analyst"
+  value       = module.api_gateway.analyst_endpoint
+}
+
 output "frontend_url" {
   description = "S3 static website URL"
   value       = "http://${module.s3.website_url}"
