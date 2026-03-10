@@ -142,12 +142,15 @@ def lambda_handler(event, context):
         client = anthropic.Anthropic(api_key=api_key)
 
         message = client.messages.create(
-            model="claude-haiku-4-5-20251001",
-            max_tokens=500,
+            model="claude-sonnet-4-6",
+            max_tokens=1024,
             system=SYSTEM_PROMPT,
+            tools=[{"type": "web_search_20250305", "name": "web_search"}],
             messages=[{"role": "user", "content": user_prompt}],
         )
-        answer = message.content[0].text
+        answer = " ".join(
+            block.text for block in message.content if block.type == "text"
+        )
 
     except Exception:
         logger.error("Anthropic API call failed:\n%s", traceback.format_exc())
