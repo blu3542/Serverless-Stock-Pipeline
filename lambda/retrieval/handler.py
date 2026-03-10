@@ -32,8 +32,14 @@ def lambda_handler(event, context):
     table_name = os.environ["DYNAMODB_TABLE"]
 
     try:
+        params = event.get("queryStringParameters") or {}
+        try:
+            days = max(1, min(int(params.get("days", 7)), 90))
+        except (ValueError, TypeError):
+            days = 7
+
         today = datetime.utcnow().date()
-        cutoff = (today - timedelta(days=7)).isoformat()
+        cutoff = (today - timedelta(days=days)).isoformat()
 
         dynamodb = boto3.resource("dynamodb")
         table = dynamodb.Table(table_name)

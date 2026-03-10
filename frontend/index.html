@@ -140,6 +140,18 @@
       white-space: nowrap;
     }
 
+    /* ── Days dropdown ────────────────────────────────────── */
+    #days-select {
+      background: #1e2530;
+      border: 1px solid #2d3748;
+      border-radius: 6px;
+      color: #e2e8f0;
+      font-size: 0.85rem;
+      padding: 0.3rem 0.6rem;
+      cursor: pointer;
+      outline: none;
+    }
+
     /* ── Footer ───────────────────────────────────────────── */
     footer {
       margin-top: 2.5rem;
@@ -226,6 +238,13 @@
   <header>
     <h1>📈 Stock Movers</h1>
     <span class="subtitle">Top daily mover across AAPL · MSFT · GOOGL · AMZN · TSLA · NVDA</span>
+    <select id="days-select">
+      <option value="7" selected>7 days</option>
+      <option value="14">14 days</option>
+      <option value="30">30 days</option>
+      <option value="60">60 days</option>
+      <option value="90">90 days</option>
+    </select>
   </header>
 
   <div id="loading"><span class="spinner"></span> Loading latest data…</div>
@@ -280,12 +299,13 @@
   const ANALYST_ENDPOINT = "https://y8kadghxxb.execute-api.us-west-1.amazonaws.com/prod/analyst";
 
   // ── DOM refs ─────────────────────────────────────────────
-  const $loading  = document.getElementById("loading");
-  const $error    = document.getElementById("error");
-  const $empty    = document.getElementById("empty");
-  const $table    = document.getElementById("table-container");
-  const $tbody    = document.getElementById("tbody");
-  const $footer   = document.getElementById("footer");
+  const $loading    = document.getElementById("loading");
+  const $error      = document.getElementById("error");
+  const $empty      = document.getElementById("empty");
+  const $table      = document.getElementById("table-container");
+  const $tbody      = document.getElementById("tbody");
+  const $footer     = document.getElementById("footer");
+  const $daysSelect = document.getElementById("days-select");
 
   function show(el)  { el.classList.remove("hidden"); }
   function hide(el)  { el.classList.add("hidden"); }
@@ -326,8 +346,13 @@
 
   // ── Fetch & render ───────────────────────────────────────
   async function loadMovers() {
+    const days = $daysSelect.value;
+    $tbody.innerHTML = "";
+    hide($table); hide($footer); hide($error); hide($empty);
+    show($loading);
+
     try {
-      const res = await fetch(API_URL);
+      const res = await fetch(`${API_URL}?days=${days}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
 
@@ -354,6 +379,7 @@
   }
 
   document.addEventListener("DOMContentLoaded", loadMovers);
+  $daysSelect.addEventListener("change", loadMovers);
 
   // ── AI Analyst ───────────────────────────────────────────
   const $analystInput  = document.getElementById("analyst-input");
@@ -365,7 +391,7 @@
     const res = await fetch(ANALYST_ENDPOINT, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ question, context_days: 7 }),
+      body: JSON.stringify({ question, context_days: Number($daysSelect.value) }),
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
