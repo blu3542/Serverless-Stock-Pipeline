@@ -73,6 +73,7 @@ module "lambda" {
   secret_arn           = module.secrets_manager.secret_arn
   anthropic_secret_arn = module.secrets_manager.anthropic_secret_arn
   stock_watchlist      = var.stock_watchlist
+  alert_email          = var.alert_email
 }
 
 # ── Scheduler ─────────────────────────────────────────────

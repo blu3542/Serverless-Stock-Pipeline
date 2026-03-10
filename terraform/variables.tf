@@ -44,3 +44,9 @@ variable "schedule_expression" {
   type        = string
   default     = "cron(0 2 * * ? *)"
 }
+
+variable "alert_email" {
+  description = "Email address to receive CloudWatch alarm notifications. Leave empty to skip email subscription."
+  type        = string
+  default     = ""
+}

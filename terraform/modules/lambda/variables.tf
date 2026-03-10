@@ -7,3 +7,4 @@ variable "dynamodb_table_name"   { type = string }
 variable "secret_arn"            { type = string }
 variable "anthropic_secret_arn"  { type = string }
 variable "stock_watchlist"       { type = list(string) }
+variable "alert_email"           { type = string }

@@ -151,3 +151,77 @@ resource "aws_cloudwatch_log_group" "analyst" {
   name              = "/aws/lambda/${aws_lambda_function.analyst.function_name}"
   retention_in_days = 14
 }
+
+# ── SNS Topic for Alarm Notifications ────────────────────────────────────────
+resource "aws_sns_topic" "alerts" {
+  name = "${var.project_name}-alerts-${var.environment}"
+}
+
+resource "aws_sns_topic_subscription" "email" {
+  count     = var.alert_email != "" ? 1 : 0
+  topic_arn = aws_sns_topic.alerts.arn
+  protocol  = "email"
+  endpoint  = var.alert_email
+}
+
+# ── CloudWatch Alarms ─────────────────────────────────────────────────────────
+
+resource "aws_cloudwatch_metric_alarm" "ingestion_errors" {
+  alarm_name          = "${var.project_name}-ingestion-errors-${var.environment}"
+  alarm_description   = "Ingestion Lambda threw an unhandled exception"
+  namespace           = "AWS/Lambda"
+  metric_name         = "Errors"
+  dimensions          = { FunctionName = aws_lambda_function.ingestion.function_name }
+  statistic           = "Sum"
+  period              = 300
+  evaluation_periods  = 1
+  threshold           = 1
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  treat_missing_data  = "notBreaching"
+  alarm_actions       = [aws_sns_topic.alerts.arn]
+  ok_actions          = [aws_sns_topic.alerts.arn]
+}
+
+resource "aws_cloudwatch_metric_alarm" "analyst_errors" {
+  alarm_name          = "${var.project_name}-analyst-errors-${var.environment}"
+  alarm_description   = "Analyst Lambda threw an unhandled exception"
+  namespace           = "AWS/Lambda"
+  metric_name         = "Errors"
+  dimensions          = { FunctionName = aws_lambda_function.analyst.function_name }
+  statistic           = "Sum"
+  period              = 300
+  evaluation_periods  = 1
+  threshold           = 1
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  treat_missing_data  = "notBreaching"
+  alarm_actions       = [aws_sns_topic.alerts.arn]
+  ok_actions          = [aws_sns_topic.alerts.arn]
+}
+
+resource "aws_cloudwatch_log_metric_filter" "ingestion_critical" {
+  name           = "${var.project_name}-ingestion-critical-${var.environment}"
+  log_group_name = aws_cloudwatch_log_group.ingestion.name
+  pattern        = "CRITICAL"
+
+  metric_transformation {
+    name          = "IngestionCriticalCount"
+    namespace     = "${var.project_name}/Lambda"
+    value         = "1"
+    default_value = "0"
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "ingestion_critical" {
+  alarm_name          = "${var.project_name}-ingestion-critical-${var.environment}"
+  alarm_description   = "Ingestion Lambda logged CRITICAL: API key failure or insufficient ticker data"
+  namespace           = "${var.project_name}/Lambda"
+  metric_name         = "IngestionCriticalCount"
+  statistic           = "Sum"
+  period              = 300
+  evaluation_periods  = 1
+  threshold           = 1
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  treat_missing_data  = "notBreaching"
+  alarm_actions       = [aws_sns_topic.alerts.arn]
+  ok_actions          = [aws_sns_topic.alerts.arn]
+}
