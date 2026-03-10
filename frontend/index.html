@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Stock Movers</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js"></script>
   <style>
     /* ── Reset & Base ─────────────────────────────────────── */
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -241,6 +242,24 @@
       margin-top: 1rem;
       color: #fc8181;
       font-size: 0.85rem;
+    }
+
+    /* ── Analyst markdown rendering ───────────────────────── */
+    #analyst-answer p { margin-bottom: 0.75rem; }
+    #analyst-answer p:last-child { margin-bottom: 0; }
+    #analyst-answer ul, #analyst-answer ol {
+      margin: 0.5rem 0 0.75rem 1.25rem;
+    }
+    #analyst-answer li { margin-bottom: 0.25rem; }
+    #analyst-answer a { color: #63b3ed; text-decoration: underline; }
+    #analyst-answer a:hover { color: #90cdf4; }
+    #analyst-answer strong { color: #e2e8f0; font-weight: 600; }
+    #analyst-answer code {
+      background: #1e2530;
+      border-radius: 3px;
+      font-family: monospace;
+      font-size: 0.85em;
+      padding: 0.1em 0.35em;
     }
 
     .hidden { display: none; }
@@ -494,7 +513,7 @@
 
     try {
       const answer = await askAnalyst(question);
-      $analystAnswer.textContent = answer;
+      $analystAnswer.innerHTML = marked.parse(answer, { mangle: false, headerIds: false });
       show($analystAnswer);
     } catch (err) {
       $analystError.textContent = `Error: ${err.message}. Please try again.`;
