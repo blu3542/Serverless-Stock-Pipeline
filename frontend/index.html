@@ -126,7 +126,19 @@
       white-space: nowrap;
     }
 
-    .badge-normal { color: #4a5568; font-size: 0.8rem; }
+    .badge-normal {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.3rem;
+      background: #1a2035;
+      color: #718096;
+      border: 1px solid #2d3748;
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 0.2rem 0.55rem;
+      border-radius: 999px;
+      white-space: nowrap;
+    }
 
     /* ── Footer ───────────────────────────────────────────── */
     footer {
@@ -195,7 +207,7 @@
   // ── Formatters ───────────────────────────────────────────
   function fmtPct(v)    { return (v >= 0 ? "+" : "") + v.toFixed(2) + "%"; }
   function fmtPrice(v)  { return "$" + v.toFixed(2); }
-  function fmtPercentile(v) { return v != null ? v.toFixed(1) + "th %ile" : "—"; }
+  function fmtPercentile(v) { return v != null ? v.toFixed(1) + "%" : "—"; }
   function fmtDate(d)   {
     // "2025-07-01" → "Tue, Jul 1"
     const [y, m, day] = d.split("-").map(Number);
@@ -211,7 +223,7 @@
 
     const significanceBadge = mover.is_significant
       ? `<span class="badge-unusual">⚠️ Unusual Move</span>`
-      : `<span class="badge-normal">—</span>`;
+      : `<span class="badge-normal">Normal Fluctuation</span>`;
 
     const tr = document.createElement("tr");
     tr.innerHTML = `
