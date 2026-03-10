@@ -154,33 +154,13 @@
       outline: none;
     }
 
-    /* ── Chart tooltip ────────────────────────────────────── */
-    #chart-tooltip {
-      position: absolute;
-      background: #1e2530;
-      border: 1px solid #2d3748;
-      border-radius: 8px;
-      padding: 0.75rem 1rem;
-      pointer-events: auto;
-      min-width: 160px;
-      z-index: 10;
+    /* ── Chart hint ───────────────────────────────────────── */
+    #chart-hint {
+      text-align: center;
+      font-size: 0.75rem;
+      color: #4a5568;
+      margin-top: 0.5rem;
     }
-    #ct-date   { font-size: 0.75rem; color: #718096; margin-bottom: 0.2rem; }
-    #ct-ticker { font-size: 1rem; font-weight: 700; margin-bottom: 0.1rem; }
-    #ct-pct    { font-size: 0.9rem; font-weight: 600; margin-bottom: 0.75rem; }
-    #ct-ask-btn {
-      width: 100%;
-      background: #2b6cb0;
-      border: none;
-      border-radius: 5px;
-      color: #fff;
-      cursor: pointer;
-      font-size: 0.8rem;
-      font-weight: 600;
-      padding: 0.4rem 0;
-      transition: background 0.15s;
-    }
-    #ct-ask-btn:hover { background: #3182ce; }
 
     /* ── Chart ────────────────────────────────────────────── */
     #chart-container {
@@ -316,13 +296,7 @@
 
   <div id="chart-container" class="hidden">
     <canvas id="moversChart"></canvas>
-  </div>
-
-  <div id="chart-tooltip" class="hidden">
-    <div id="ct-date"></div>
-    <div id="ct-ticker"></div>
-    <div id="ct-pct"></div>
-    <button id="ct-ask-btn">Ask AI</button>
+    <div id="chart-hint">Click any bar to ask AI about that day</div>
   </div>
 
   <div id="table-container" class="hidden">
@@ -381,12 +355,6 @@
   const $daysSelect = document.getElementById("days-select");
 
   let chartInstance = null;
-  let hideTooltipTimer = null;
-
-  // Prevent tooltip from flickering when mouse moves from bar to tooltip div
-  const $chartTooltip = document.getElementById("chart-tooltip");
-  $chartTooltip.addEventListener("mouseenter", () => clearTimeout(hideTooltipTimer));
-  $chartTooltip.addEventListener("mouseleave", () => $chartTooltip.classList.add("hidden"));
 
   function show(el)  { el.classList.remove("hidden"); }
   function hide(el)  { el.classList.add("hidden"); }
@@ -435,45 +403,35 @@
       options: {
         responsive: true,
         maintainAspectRatio: false,
+        onClick(_, elements) {
+          if (!elements.length) return;
+          const mover = displayed[elements[0].index];
+          $analystInput.value =
+            `What major news or events affected ${mover.ticker} around ${fmtDate(mover.date)}?`;
+          document.getElementById("analyst-section").scrollIntoView({ behavior: "smooth" });
+          $analystInput.focus();
+        },
+        onHover(event, elements) {
+          event.native.target.style.cursor = elements.length ? "pointer" : "default";
+        },
         plugins: {
           legend: { display: false },
           tooltip: {
-            enabled: false,
-            external({ chart, tooltip }) {
-              const $tt = document.getElementById("chart-tooltip");
-
-              if (tooltip.opacity === 0) {
-                hideTooltipTimer = setTimeout(() => $tt.classList.add("hidden"), 150);
-                return;
+            enabled: true,
+            callbacks: {
+              label: (ctx) => {
+                const mover = displayed[ctx.dataIndex];
+                const sign = mover.pct_change >= 0 ? "+" : "";
+                const sig = mover.is_significant ? "  ⚠️ Unusual move" : "";
+                return `${mover.ticker}: ${sign}${mover.pct_change.toFixed(2)}%${sig}`;
               }
-              clearTimeout(hideTooltipTimer);
-
-              const mover = displayed[tooltip.dataPoints[0].dataIndex];
-              const sign = mover.pct_change >= 0 ? "+" : "";
-
-              document.getElementById("ct-date").textContent = fmtDate(mover.date);
-              document.getElementById("ct-ticker").textContent =
-                mover.is_significant ? `${mover.ticker} ⚠️` : mover.ticker;
-              const pctEl = document.getElementById("ct-pct");
-              pctEl.textContent = `${sign}${mover.pct_change.toFixed(2)}%`;
-              pctEl.style.color = mover.pct_change >= 0 ? "#22c55e" : "#ef4444";
-
-              const canvas = chart.canvas;
-              const rect = canvas.getBoundingClientRect();
-              const containerRect = canvas.closest(".container").getBoundingClientRect();
-              $tt.style.left = (rect.left - containerRect.left + tooltip.caretX) + "px";
-              $tt.style.top  = (rect.top  - containerRect.top  + tooltip.caretY) + "px";
-              $tt.classList.remove("hidden");
-
-              document.getElementById("ct-ask-btn").onclick = () => {
-                $tt.classList.add("hidden");
-                $analystInput.value =
-                  `What major news or events affected ${mover.ticker} around ${fmtDate(mover.date)}?`;
-                document.getElementById("analyst-section")
-                  .scrollIntoView({ behavior: "smooth" });
-                $analystInput.focus();
-              };
-            }
+            },
+            backgroundColor: "#1e2530",
+            borderColor: "#2d3748",
+            borderWidth: 1,
+            titleColor: "#718096",
+            bodyColor: "#e2e8f0",
+            padding: 10,
           }
         },
         scales: {
