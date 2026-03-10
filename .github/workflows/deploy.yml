@@ -59,6 +59,7 @@ jobs:
         env:
           TF_VAR_stock_api_key:     ${{ secrets.TF_VAR_STOCK_API_KEY }}
           TF_VAR_anthropic_api_key: ${{ secrets.TF_VAR_ANTHROPIC_API_KEY }}
+          TF_VAR_alert_email:       ${{ secrets.TF_VAR_ALERT_EMAIL }}
 
       # ── 7. Apply ──────────────────────────────────────────────────────────
       - name: Terraform Apply
@@ -66,6 +67,7 @@ jobs:
         env:
           TF_VAR_stock_api_key:     ${{ secrets.TF_VAR_STOCK_API_KEY }}
           TF_VAR_anthropic_api_key: ${{ secrets.TF_VAR_ANTHROPIC_API_KEY }}
+          TF_VAR_alert_email:       ${{ secrets.TF_VAR_ALERT_EMAIL }}
 
       # ── 8. Deploy frontend to S3 ──────────────────────────────────────────
       - name: Deploy frontend to S3
