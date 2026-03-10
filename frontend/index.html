@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Stock Movers</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
   <style>
     /* ── Reset & Base ─────────────────────────────────────── */
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -152,6 +153,19 @@
       outline: none;
     }
 
+    /* ── Chart ────────────────────────────────────────────── */
+    #chart-container {
+      background: #161b26;
+      border: 1px solid #2d3748;
+      border-radius: 10px;
+      padding: 1.25rem 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+
+    #chart-container canvas {
+      height: 300px !important;
+    }
+
     /* ── Footer ───────────────────────────────────────────── */
     footer {
       margin-top: 2.5rem;
@@ -253,6 +267,10 @@
 
   <div id="empty" class="hidden">No data yet — check back after market close (5 PM EST).</div>
 
+  <div id="chart-container" class="hidden">
+    <canvas id="moversChart"></canvas>
+  </div>
+
   <div id="table-container" class="hidden">
     <div class="table-wrap">
       <table>
@@ -302,10 +320,13 @@
   const $loading    = document.getElementById("loading");
   const $error      = document.getElementById("error");
   const $empty      = document.getElementById("empty");
+  const $chart      = document.getElementById("chart-container");
   const $table      = document.getElementById("table-container");
   const $tbody      = document.getElementById("tbody");
   const $footer     = document.getElementById("footer");
   const $daysSelect = document.getElementById("days-select");
+
+  let chartInstance = null;
 
   function show(el)  { el.classList.remove("hidden"); }
   function hide(el)  { el.classList.add("hidden"); }
@@ -319,6 +340,68 @@
     const [y, m, day] = d.split("-").map(Number);
     return new Date(y, m - 1, day).toLocaleDateString("en-US", {
       weekday: "short", month: "short", day: "numeric"
+    });
+  }
+
+  function fmtChartDate(d) {
+    // "2025-07-01" → "Jul 1"
+    const [y, m, day] = d.split("-").map(Number);
+    return new Date(y, m - 1, day).toLocaleDateString("en-US", {
+      month: "short", day: "numeric"
+    });
+  }
+
+  // ── Build chart ──────────────────────────────────────────
+  function buildChart(movers) {
+    if (chartInstance) {
+      chartInstance.destroy();
+      chartInstance = null;
+    }
+
+    const ctx = document.getElementById("moversChart").getContext("2d");
+    const displayed = [...movers].reverse(); // oldest → newest left to right
+
+    chartInstance = new Chart(ctx, {
+      type: "bar",
+      data: {
+        labels: displayed.map(m => fmtChartDate(m.date)),
+        datasets: [{
+          label: "% Change",
+          data: displayed.map(m => m.pct_change),
+          backgroundColor: displayed.map(m => m.pct_change >= 0 ? "#22c55e" : "#ef4444"),
+          borderRadius: 4,
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: (ctx) => {
+                const mover = displayed[ctx.dataIndex];
+                const sign = mover.pct_change >= 0 ? "+" : "";
+                const sig = mover.is_significant ? "  ⚠️ Statistically unusual move" : "";
+                return `${mover.ticker}: ${sign}${mover.pct_change.toFixed(2)}%${sig}`;
+              }
+            }
+          }
+        },
+        scales: {
+          x: {
+            ticks: { color: "#718096" },
+            grid: { color: "#1e2530" },
+          },
+          y: {
+            ticks: {
+              color: "#718096",
+              callback: (val) => val + "%"
+            },
+            grid: { color: "#1e2530" },
+          }
+        }
+      }
     });
   }
 
@@ -348,7 +431,7 @@
   async function loadMovers() {
     const days = $daysSelect.value;
     $tbody.innerHTML = "";
-    hide($table); hide($footer); hide($error); hide($empty);
+    hide($chart); hide($table); hide($footer); hide($error); hide($empty);
     show($loading);
 
     try {
@@ -363,11 +446,13 @@
         return;
       }
 
+      buildChart(data.movers);
       data.movers.forEach(m => $tbody.appendChild(buildRow(m)));
 
       $footer.textContent =
         `${data.count} record${data.count !== 1 ? "s" : ""} · last updated ${data.generated_at}`;
 
+      show($chart);
       show($table);
       show($footer);
 
