@@ -2,12 +2,10 @@ import json
 import logging
 import os
 import traceback
-from datetime import datetime, timedelta
 from decimal import Decimal
 
 import anthropic
 import boto3
-from boto3.dynamodb.conditions import Attr
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -84,7 +82,7 @@ def lambda_handler(event, context):
                 "headers": CORS_HEADERS,
                 "body": json.dumps({"error": "Missing required field: question"}),
             }
-        context_days = min(int(body.get("context_days", 7)), 30)
+        context_days = min(int(body.get("context_days", 7)), 90)
     except (json.JSONDecodeError, ValueError) as e:
         return {
             "statusCode": 400,
@@ -94,23 +92,19 @@ def lambda_handler(event, context):
 
     # Fetch DynamoDB records
     try:
-        today = datetime.utcnow().date()
-        cutoff = (today - timedelta(days=context_days)).isoformat()
-
         dynamodb = boto3.resource("dynamodb")
         table = dynamodb.Table(table_name)
 
-        response = table.scan(FilterExpression=Attr("date").gte(cutoff))
+        response = table.scan()
         items = response.get("Items", [])
 
         while "LastEvaluatedKey" in response:
-            response = table.scan(
-                FilterExpression=Attr("date").gte(cutoff),
-                ExclusiveStartKey=response["LastEvaluatedKey"],
-            )
+            response = table.scan(ExclusiveStartKey=response["LastEvaluatedKey"])
             items.extend(response.get("Items", []))
 
+        # Sort descending, then keep only the N most recent trading day records
         items.sort(key=lambda x: x["date"], reverse=True)
+        items = items[:context_days]
         for item in items:
             item.pop("ttl", None)
         items = convert_decimals(items)
