@@ -23,8 +23,9 @@ highest absolute % change each day from a watchlist of: AAPL, MSFT,
 GOOGL, AMZN, TSLA, NVDA.
 
 Each record includes: date, ticker, % change (signed), open price,
-close price, z-score, and whether the move was statistically significant
-(z-score > 2.0 means outside normal range for that stock).
+close price, percentile rank (0–100, based on 90 days of historical moves),
+and whether the move was statistically significant (percentile rank >= 85
+means the move is in the top 15% of historical moves for that stock).
 
 Answer the user's question using only the data provided. Be concise —
 2-4 sentences. If a move was statistically significant, mention it.
@@ -49,14 +50,15 @@ def format_records(items):
         ticker = item.get("ticker", "?")
         pct = item.get("pct_change", 0)
         close = item.get("close_price", 0)
-        zscore = item.get("z_score", item.get("zscore", 0))
+        percentile = item.get("percentile_rank")
         significant = item.get("is_significant", False)
 
         pct_str = f"+{pct:.2f}%" if pct >= 0 else f"{pct:.2f}%"
+        percentile_str = f"{percentile:.1f}th percentile" if percentile is not None else "N/A"
         sig_str = "YES" if significant else "NO"
         lines.append(
             f"Date: {date} | Winner: {ticker} | Change: {pct_str} | "
-            f"Close: ${close:.2f} | Z-Score: {zscore:.2f} | Significant: {sig_str}"
+            f"Close: ${close:.2f} | Percentile: {percentile_str} | Significant: {sig_str}"
         )
     return "\n".join(lines)
 

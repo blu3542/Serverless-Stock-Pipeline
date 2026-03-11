@@ -4,12 +4,11 @@ import logging
 import os
 import time
 import traceback
-from datetime import datetime, timedelta
+from datetime import datetime
 from decimal import Decimal
 from email.utils import formatdate, parsedate
 
 import boto3
-from boto3.dynamodb.conditions import Attr
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -48,27 +47,20 @@ def lambda_handler(event, context):
         except (ValueError, TypeError):
             days = 7
 
-        today = datetime.utcnow().date()
-        cutoff = (today - timedelta(days=days)).isoformat()
-
         dynamodb = boto3.resource("dynamodb")
         table = dynamodb.Table(table_name)
 
-        response = table.scan(
-            FilterExpression=Attr("date").gte(cutoff)
-        )
+        response = table.scan()
         items = response.get("Items", [])
 
         # Handle DynamoDB pagination
         while "LastEvaluatedKey" in response:
-            response = table.scan(
-                FilterExpression=Attr("date").gte(cutoff),
-                ExclusiveStartKey=response["LastEvaluatedKey"],
-            )
+            response = table.scan(ExclusiveStartKey=response["LastEvaluatedKey"])
             items.extend(response.get("Items", []))
 
-        # Sort descending by date (most recent first)
+        # Sort descending by date, then keep the N most recent trading day records
         items.sort(key=lambda x: x["date"], reverse=True)
+        items = items[:days]
 
         # Remove TTL from response payload — internal implementation detail
         for item in items:
@@ -103,7 +95,7 @@ def lambda_handler(event, context):
         if last_modified:
             response_headers["Last-Modified"] = last_modified
 
-        logger.info("Returning %d movers since %s", len(movers), cutoff)
+        logger.info("Returning %d movers (requested %d)", len(movers), days)
         return {
             "statusCode": 200,
             "headers": response_headers,
