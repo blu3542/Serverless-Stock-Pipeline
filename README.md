@@ -1,6 +1,6 @@
 # Stock Movers
 
-A fully automated, serverless AWS pipeline that tracks a watchlist of 6 tech stocks daily, identifies the single largest mover by absolute % change, and surfaces the results on a public frontend — with a statistical significance layer (z-score) that flags genuinely unusual moves.
+A fully automated, serverless AWS pipeline that tracks a watchlist of 6 tech stocks daily, identifies the single largest mover by absolute % change, and surfaces the results on a public frontend, flagging unusual moves (85+ percentile) moves. The user is given access to an AI Agent to answer questions regarding certain stock moves and can access via the chat interface or clicking the bar graph.
 
 ---
 
