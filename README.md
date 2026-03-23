@@ -52,12 +52,12 @@ A fully automated, serverless AWS pipeline that tracks a watchlist of 6 tech sto
 
 ## Prerequisites
 
-| Tool | Version |
-|---|---|
-| [AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/install-cliv2.html) | v2+ |
-| [Terraform](https://developer.hashicorp.com/terraform/downloads) | >= 1.5 |
-| [Python](https://www.python.org/downloads/) | 3.12 (for local Lambda testing only) |
-| [Node.js](https://nodejs.org/) | 18+ (for the CLI only) |
+| Tool                                                                           | Version                              |
+| ------------------------------------------------------------------------------ | ------------------------------------ |
+| [AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/install-cliv2.html) | v2+                                  |
+| [Terraform](https://developer.hashicorp.com/terraform/downloads)               | >= 1.5                               |
+| [Python](https://www.python.org/downloads/)                                    | 3.12 (for local Lambda testing only) |
+| [Node.js](https://nodejs.org/)                                                 | 18+ (for the CLI only)               |
 
 You also need a [Massive API](https://massive.com) key for stock data and an [Anthropic API](https://console.anthropic.com/) key for the AI Analyst feature.
 
@@ -82,10 +82,11 @@ cd terraform
 cp terraform.tfvars.example terraform.tfvars
 ```
 
-Edit `terraform.tfvars` and set your Massive API key:
+Edit `terraform.tfvars` and set your API keys:
 
 ```hcl
-stock_api_key = "your_actual_api_key_here"
+stock_api_key     = "your_massive_api_key_here"
+anthropic_api_key = "your_anthropic_api_key_here"
 ```
 
 > `terraform.tfvars` is in `.gitignore` — it will never be committed.
@@ -107,10 +108,11 @@ terraform plan
 terraform apply
 ```
 
-After apply, Terraform prints four outputs:
+After apply, Terraform prints five outputs:
 
 ```
 api_endpoint        = "https://xxxx.execute-api.us-east-1.amazonaws.com/prod/movers"
+analyst_endpoint    = "https://xxxx.execute-api.us-east-1.amazonaws.com/prod/analyst"
 frontend_url        = "http://stock-movers-frontend-prod-abcd1234.s3-website-us-east-1.amazonaws.com"
 dynamodb_table_name = "stock-movers-prod"
 s3_bucket_name      = "stock-movers-frontend-prod-abcd1234"
@@ -118,10 +120,12 @@ s3_bucket_name      = "stock-movers-frontend-prod-abcd1234"
 
 ### 3. Wire the frontend to the API
 
-Edit `frontend/index.html` and replace the placeholder at the top of the `<script>` block:
+Edit `frontend/index.html` and replace the placeholders at the top of the `<script>` block:
 
 ```js
 const API_URL = "https://xxxx.execute-api.us-east-1.amazonaws.com/prod/movers";
+const ANALYST_URL =
+  "https://xxxx.execute-api.us-east-1.amazonaws.com/prod/analyst";
 ```
 
 ### 4. Deploy the frontend
@@ -137,18 +141,18 @@ Open the `frontend_url` output in a browser — you should see the dashboard.
 
 ## CI/CD (GitHub Actions)
 
-Every push to `main` automatically runs the full deploy pipeline.
+Every push to `main` automatically runs the full deploy pipeline. Pull requests against `main` run `terraform plan` only and post the output as a PR comment.
 
 ### Required GitHub Secrets
 
 Go to **Settings → Secrets and variables → Actions** and add:
 
-| Secret | Description |
-|---|---|
-| `AWS_ACCESS_KEY_ID` | IAM user access key |
-| `AWS_SECRET_ACCESS_KEY` | IAM user secret |
-| `TF_VAR_STOCK_API_KEY` | Massive API key (Terraform picks this up automatically) |
-| `TF_VAR_ANTHROPIC_API_KEY` | Anthropic API key for the AI Analyst Lambda |
+| Secret                     | Description                                             |
+| -------------------------- | ------------------------------------------------------- |
+| `AWS_ACCESS_KEY_ID`        | IAM user access key                                     |
+| `AWS_SECRET_ACCESS_KEY`    | IAM user secret                                         |
+| `TF_VAR_STOCK_API_KEY`     | Massive API key (Terraform picks this up automatically) |
+| `TF_VAR_ANTHROPIC_API_KEY` | Anthropic API key for the AI Analyst Lambda             |
 
 ---
 
@@ -160,9 +164,13 @@ Trigger the ingestion Lambda on demand (useful for testing outside market hours)
 aws lambda invoke \
   --function-name stock-movers-ingestion-prod \
   --payload '{}' \
-  /tmp/response.json
+  /tmp/response.json && cat /tmp/response.json
+```
 
-cat /tmp/response.json
+Backfill a specific date:
+
+```bash
+aws lambda invoke --function-name stock-movers-ingestion-prod --payload '{"backfill_date": "2026-03-04"}' --cli-binary-format raw-in-base64-out /tmp/out.json --region us-east-1 && cat /tmp/out.json
 ```
 
 Check CloudWatch logs:
@@ -206,10 +214,10 @@ npm run build
 stocks <ticker|all> [--days <n>]
 ```
 
-| Argument / Flag | Description | Default |
-|---|---|---|
-| `<ticker>` | Stock ticker to filter (e.g. `TSLA`, `NVDA`) or `all` for every entry | required |
-| `-d, --days <n>` | Number of days to fetch (1–90) | `7` |
+| Argument / Flag  | Description                                                           | Default  |
+| ---------------- | --------------------------------------------------------------------- | -------- |
+| `<ticker>`       | Stock ticker to filter (e.g. `TSLA`, `NVDA`) or `all` for every entry | required |
+| `-d, --days <n>` | Number of days to fetch (1–90)                                        | `7`      |
 
 ```bash
 # Show all top movers for the last 7 days
@@ -255,9 +263,10 @@ cd terraform
 terraform destroy
 ```
 
-This removes all AWS resources. The DynamoDB table, Lambda functions, API Gateway, S3 bucket, and Secrets Manager secret are all deleted.
+This removes all AWS resources including the DynamoDB table, all Lambda functions, API Gateway, S3 bucket, and both Secrets Manager secrets.
 
 > Note: The S3 bucket must be empty before it can be deleted. If `terraform destroy` fails on the bucket, empty it first:
+>
 > ```bash
 > aws s3 rm s3://$(terraform output -raw s3_bucket_name) --recursive
 > ```
@@ -269,11 +278,13 @@ This removes all AWS resources. The DynamoDB table, Lambda functions, API Gatewa
 The frontend includes a chat interface that lets you ask natural language questions about recent stock movements. Questions are sent to the analyst Lambda via `POST /analyst`.
 
 **Request:**
+
 ```json
 { "question": "Why did NVDA move so much this week?", "context_days": 7 }
 ```
 
 **Response:**
+
 ```json
 { "answer": "NVDA surged X% on ... (natural language analysis)" }
 ```
@@ -284,20 +295,30 @@ The Lambda fetches the last N days of DynamoDB records as context, then calls **
 
 ## Z-Score Statistical Significance
 
-Each day's winning stock is evaluated against its own 90-day history using a **z-score**:
+Each day's winning stock is evaluated against its own 90-day history to determine whether the move is unusual:
 
-```
-z = (today_pct_change - mean_90d) / stdev_90d
-```
+| Field            | Meaning                                                                                                              |
+| ---------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `is_significant` | `true` when the absolute % change falls at or above the **85th percentile** of that ticker's 90-day historical moves |
 
-| Field | Meaning |
-|---|---|
-| `z_score` | How many standard deviations today's move is from the ticker's 90-day mean |
-| `is_significant` | `true` when `abs(z_score) > 2.0` — approximately the top 5% of historical moves |
+A move flagged as significant (⚠️ **Unusual Move** on the frontend) means the stock moved more than it does on 85% of trading days in its own recent history — not just that it moved a lot in absolute terms. This makes the flag ticker-relative: a 3% move might be ordinary for TSLA but extraordinary for MSFT.
 
-A move flagged as significant (⚠️ **Unusual Move** on the frontend) suggests the stock is behaving in a statistically abnormal way relative to its own recent history — not just that it moved a lot in absolute terms.
+If the historical data fetch fails for any reason, `is_significant` defaults to `false` — the daily winner record is still written.
 
-If the historical data fetch fails for any reason, `z_score` is stored as `null` and `is_significant` defaults to `false` — the daily winner record is still written.
+---
+
+## AI Analyst
+
+The frontend includes an AI-powered chat interface backed by Claude (`claude-sonnet-4-6`) with web search capability. Users can ask natural language questions about the data:
+
+- _"Why did NVDA spike on March 4th?"_
+- _"Which stock has been most volatile this week?"_
+- _"Was last Tuesday's TSLA move unusual?"_
+- _"Were there any macro events that explain this week's moves?"_
+
+The analyst Lambda retrieves the last 7 days of DynamoDB records as context, then passes both the data and the user's question to the Anthropic API. Claude autonomously decides whether to run a web search to find relevant news or events, then synthesizes a concise answer. The chat is also accessible by clicking any bar in the % change chart.
+
+The Anthropic API key is stored in AWS Secrets Manager and never exposed to the browser.
 
 ---
 
