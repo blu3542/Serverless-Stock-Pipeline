@@ -1,39 +1,49 @@
 # Stock Movers
 
-A fully automated, serverless AWS pipeline that tracks a watchlist of 6 tech stocks daily, identifies the single largest mover by absolute % change, and surfaces the results on a public frontend — with a statistical significance layer (z-score) that flags genuinely unusual moves.
+A fully automated, serverless AWS pipeline that tracks a watchlist of 6 tech stocks daily, identifies the single largest mover by absolute % change, and surfaces the results on a public frontend — with a statistical significance layer (z-score) that flags genuinely unusual moves and an AI Analyst chat feature powered by Claude.
 
 ---
 
 ## Architecture
 
 ```
-                           ┌─────────────────────────────────────────────────┐
-                           │                    AWS (us-east-1)               │
-                           │                                                   │
-  Market close (5 PM EST)  │  ┌──────────────┐    ┌─────────────────────┐    │
-  ─────────────────────────┼─▶│  EventBridge │───▶│  Lambda: Ingestion  │    │
-  cron(0 21 * * ? *)       │  └──────────────┘    │  (Python 3.12)      │    │
-                           │                       │                     │    │
-                           │  ┌────────────────┐   │  1. Fetch OHLC for  │    │
-                           │  │ Secrets Manager│◀──│     6 tickers       │    │
-                           │  │ (API key)      │   │  2. Find winner     │    │
-                           │  └────────────────┘   │  3. Compute z-score │    │
-                           │                       │  4. Write to DB     │    │
-                           │                       └──────────┬──────────┘    │
-                           │                                  │               │
-                           │                       ┌──────────▼──────────┐    │
-                           │                       │     DynamoDB        │    │
-                           │                       │  (one row / day)    │    │
-                           │                       └──────────┬──────────┘    │
-                           │                                  │               │
-                           │  ┌──────────────┐   ┌───────────▼─────────┐     │
-  Browser ─────────────────┼─▶│ API Gateway  │──▶│  Lambda: Retrieval  │     │
-  GET /movers              │  │ REST API     │   │  (Python 3.12)      │     │
-                           │  └──────────────┘   │  Last 7 days, JSON  │     │
-                           │                      └─────────────────────┘     │
-                           │                                                   │
-  Browser ─────────────────┼─▶  S3 Static Website  (index.html)               │
-                           └─────────────────────────────────────────────────┘
+                           ┌──────────────────────────────────────────────────────┐
+                           │                      AWS                             │
+                           │                                                      │
+  Market close (5 PM EST)  │  ┌──────────────┐    ┌──────────────────────────┐   │
+  ─────────────────────────┼─▶│  EventBridge │───▶│   Lambda: Ingestion      │   │
+  cron(0 21 * * ? *)       │  └──────────────┘    │   (Python 3.12)          │   │
+                           │                       │                          │   │
+                           │  ┌─────────────────┐  │  1. Fetch OHLC for      │   │
+                           │  │ Secrets Manager │◀─│     6 tickers           │   │
+                           │  │ (Massive key +  │  │  2. Find winner         │   │
+                           │  │  Anthropic key) │  │  3. Compute z-score     │   │
+                           │  └─────────────────┘  │  4. Write to DB         │   │
+                           │                       └────────────┬─────────────┘  │
+                           │                                    │                │
+                           │                       ┌────────────▼─────────────┐  │
+                           │                       │        DynamoDB          │  │
+                           │                       │     (one row / day)      │  │
+                           │                       └────────────┬─────────────┘  │
+                           │                                    │                │
+                           │  ┌──────────────┐   ┌─────────────▼────────────┐   │
+  Browser ─────────────────┼─▶│ API Gateway  │──▶│   Lambda: Retrieval      │   │
+  GET /movers              │  │  REST API    │   │   (Python 3.12)          │   │
+                           │  │              │   │   Last N days, JSON      │   │
+                           │  │              │   └──────────────────────────┘   │
+                           │  │              │                                   │
+                           │  │              │   ┌──────────────────────────┐   │
+  Browser ─────────────────┼─▶│              │──▶│   Lambda: Analyst        │   │
+  POST /analyst            │  └──────────────┘   │   (Python 3.12)          │   │
+                           │                      │                          │   │
+                           │                      │  1. Read context from DB │   │
+                           │                      │  2. Fetch Anthropic key  │   │
+                           │                      │  3. Call Claude w/ web   │   │
+                           │                      │     search               │   │
+                           │                      └──────────────────────────┘   │
+                           │                                                      │
+  Browser ─────────────────┼─▶  S3 Static Website  (index.html)                  │
+                           └──────────────────────────────────────────────────────┘
 ```
 
 **Stock Watchlist:** `AAPL · MSFT · GOOGL · AMZN · TSLA · NVDA`
@@ -47,8 +57,9 @@ A fully automated, serverless AWS pipeline that tracks a watchlist of 6 tech sto
 | [AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/install-cliv2.html) | v2+ |
 | [Terraform](https://developer.hashicorp.com/terraform/downloads) | >= 1.5 |
 | [Python](https://www.python.org/downloads/) | 3.12 (for local Lambda testing only) |
+| [Node.js](https://nodejs.org/) | 18+ (for the CLI only) |
 
-You also need a [Massive API](https://massive.com) key for stock data.
+You also need a [Massive API](https://massive.com) key for stock data and an [Anthropic API](https://console.anthropic.com/) key for the AI Analyst feature.
 
 ---
 
@@ -137,6 +148,7 @@ Go to **Settings → Secrets and variables → Actions** and add:
 | `AWS_ACCESS_KEY_ID` | IAM user access key |
 | `AWS_SECRET_ACCESS_KEY` | IAM user secret |
 | `TF_VAR_STOCK_API_KEY` | Massive API key (Terraform picks this up automatically) |
+| `TF_VAR_ANTHROPIC_API_KEY` | Anthropic API key for the AI Analyst Lambda |
 
 ---
 
@@ -165,6 +177,75 @@ Test the retrieval endpoint directly:
 curl -s $(cd terraform && terraform output -raw api_endpoint) | python3 -m json.tool
 ```
 
+Test the analyst endpoint:
+
+```bash
+API=$(cd terraform && terraform output -raw api_endpoint | sed 's|/movers||')
+curl -s -X POST "$API/analyst" \
+  -H "Content-Type: application/json" \
+  -d '{"question": "Why did NVDA move today?", "context_days": 7}' | python3 -m json.tool
+```
+
+---
+
+## CLI
+
+A TypeScript CLI (`stocks`) for querying the movers API directly from the terminal. Built with [Commander](https://github.com/tj/commander.js) and [Chalk](https://github.com/chalk/chalk) for colored output.
+
+**Build:**
+
+```bash
+cd cli
+npm install
+npm run build
+```
+
+**Usage:**
+
+```bash
+stocks <ticker|all> [--days <n>]
+```
+
+| Argument / Flag | Description | Default |
+|---|---|---|
+| `<ticker>` | Stock ticker to filter (e.g. `TSLA`, `NVDA`) or `all` for every entry | required |
+| `-d, --days <n>` | Number of days to fetch (1–90) | `7` |
+
+```bash
+# Show all top movers for the last 7 days
+stocks all
+
+# Filter to a specific ticker
+stocks TSLA
+
+# Custom date range
+stocks NVDA --days 30
+stocks all -d 14
+```
+
+**Output columns:**
+
+```
+Date            Ticker  % Change    Open        Close       Percentile  Significance
+────────────────────────────────────────────────────────────────────────────────────
+Fri, Mar 21     NVDA    +4.82%      $875.00     $917.24     94.3%       ⚠ Unusual Move
+Thu, Mar 20     TSLA    -2.11%      $192.50     $188.44     31.0%       Normal
+```
+
+- **% Change** is green for gains, red for losses.
+- **Percentile** is the ticker's historical percentile rank for that day's move.
+- **Significance** shows `⚠ Unusual Move` (yellow) when the z-score exceeds ±2.0, otherwise `Normal`.
+
+If no records match the requested ticker, the CLI lists which tickers are available in the returned data.
+
+**Install globally via npm link:**
+
+```bash
+cd cli && npm link
+stocks all
+stocks TSLA --days 14
+```
+
 ---
 
 ## Tear Down
@@ -180,6 +261,24 @@ This removes all AWS resources. The DynamoDB table, Lambda functions, API Gatewa
 > ```bash
 > aws s3 rm s3://$(terraform output -raw s3_bucket_name) --recursive
 > ```
+
+---
+
+## AI Analyst
+
+The frontend includes a chat interface that lets you ask natural language questions about recent stock movements. Questions are sent to the analyst Lambda via `POST /analyst`.
+
+**Request:**
+```json
+{ "question": "Why did NVDA move so much this week?", "context_days": 7 }
+```
+
+**Response:**
+```json
+{ "answer": "NVDA surged X% on ... (natural language analysis)" }
+```
+
+The Lambda fetches the last N days of DynamoDB records as context, then calls **Claude (claude-sonnet-4-6)** with the `web_search` tool enabled — so answers combine your historical data with real-time news retrieval. The Anthropic API key is read from Secrets Manager at runtime (never hardcoded).
 
 ---
 
@@ -226,11 +325,21 @@ stock-movers/
 │   ├── ingestion/
 │   │   ├── handler.py
 │   │   └── requirements.txt
-│   └── retrieval/
-│       ├── handler.py
+│   ├── retrieval/
+│   │   ├── handler.py
+│   │   └── requirements.txt
+│   └── analyst/
+│       ├── handler.py           # Proxies questions to Claude w/ web search
 │       └── requirements.txt
 ├── frontend/
 │   └── index.html
+├── cli/                         # TypeScript CLI (stocks <ticker>)
+│   ├── src/
+│   │   ├── index.ts
+│   │   ├── api.ts
+│   │   └── formatter.ts
+│   ├── package.json
+│   └── tsconfig.json
 ├── .gitignore
 └── README.md
 ```

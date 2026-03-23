@@ -1,6 +1,5 @@
 # ─── Claude Code ────────────────────────────────────────────────────────────
 .claude/
-
 # ─── macOS ──────────────────────────────────────────────────────────────────
 .DS_Store
 .AppleDouble
@@ -156,6 +155,7 @@ lambda/retrieval/__pycache__/
 terraform/modules/lambda/builds/*.zip
 terraform/modules/lambda/builds/ingestion_pkg/
 terraform/modules/lambda/builds/retrieval_pkg/
+terraform/modules/lambda/builds/analyst_pkg/
 
 # ─── Misc ────────────────────────────────────────────────────────────────────
 *.tmp

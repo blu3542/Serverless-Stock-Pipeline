@@ -1,0 +1,27 @@
+{
+  "name": "stocks-cli",
+  "version": "1.0.0",
+  "description": "CLI for querying stock movers from the PennyMac API",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "stocks": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc && chmod +x dist/index.js",
+    "dev": "tsx src/index.ts",
+    "clean": "rm -rf dist"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "chalk": "^5.6.2",
+    "commander": "^14.0.3"
+  },
+  "devDependencies": {
+    "@types/node": "^25.5.0",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3"
+  }
+}
